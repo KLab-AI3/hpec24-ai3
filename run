@@ -1,0 +1,112 @@
+#!/usr/bin/env python
+
+import subprocess
+import os
+from pathlib import Path
+import argparse
+
+PY = "python -m"
+PIP = "pip"
+C_FORMAT = "clang-format"
+PY_FORMAT = "autopep8"
+
+TEST_MOD = "test"
+EXAMPLE_MOD = "example"
+UNIT_TEST_MOD = TEST_MOD + ".unit"
+SWAP_CONV2D_TEST_MOD = TEST_MOD + '.swap_conv2d'
+SWAP_BACKEND_TEST_MOD = TEST_MOD + '.swap_backend'
+BENCH_MOD = "bench"
+LAYER_BENCH_MOD = BENCH_MOD + ".layers"
+SWAP_CONV2D_BENCH_MOD = BENCH_MOD + ".swap_conv2d"
+SWAP_BACKEND_BENCH_MOD = BENCH_MOD + ".swap_backend"
+
+CSRC_FILES = [str(f) for f in Path('.').rglob('*') if f.suffix in ['.cpp', '.hpp'] and 'venv' not in f.parts]
+PY_FILES = [str(f) for f in Path('.').rglob('*.py') if 'venv' not in f.parts]
+
+def run_command(command):
+    print(f'Running: {command}')
+    try:
+        subprocess.run(command, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print("Error:", e)
+        exit(1)
+
+def gen_clangd(file_path):
+    import pybind11
+    flags = [
+        '-Wall',
+        '-Wextra',
+        '-Werror',
+        '-std=c++17',
+        '-I' +
+        os.path.join(os.path.dirname(pybind11.__file__), 'include'),
+        *subprocess.check_output(
+            ['python3-config', '--include']).decode().strip().split()
+        ]
+    with open(file_path, 'w') as f:
+        f.write('CompileFlags:\n')
+        f.write('  Add:\n')
+        for flag in flags:
+            f.write(f'    - "{flag}"\n')
+
+def build(editable: bool = False, verbose: bool = False, dev: bool = False):
+    cxx_flags = ""
+    cmd = f"{PIP} install"
+    if editable:
+        cmd += " --editable"
+    cmd += " ."
+    if dev:
+        cmd += "[dev]"
+    if verbose:
+        cmd += " --verbose"
+    if cxx_flags:
+        cmd += f" --config-settings=cmake.define.CMAKE_CXX_FLAGS=\'{cxx_flags}\'"
+    run_command(cmd)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run various development commands")
+    parser.add_argument("commands", nargs='+')
+    args = parser.parse_args()
+
+    for cmd in args.commands:
+        if cmd == "gen_clangd":
+            gen_clangd('.clangd')
+        elif cmd == "install":
+            build()
+        elif cmd == "install_e":
+            build(editable=True)
+        elif cmd == "install_ev":
+            build(editable=True, verbose=True)
+        elif cmd == "install_d":
+            build(dev=True)
+        elif cmd.startswith(BENCH_MOD):
+            run_command(f"{PY} {cmd}")
+        elif cmd.startswith(EXAMPLE_MOD):
+            run_command(f"{PY} {cmd}")
+        elif cmd.startswith("lbench"):
+            updated_command = cmd.replace("lbench", LAYER_BENCH_MOD, 1)
+            run_command(f"{PY} {updated_command}")
+        elif cmd.startswith("scbench"):
+            updated_command = cmd.replace("scbench", SWAP_CONV2D_BENCH_MOD, 1)
+            run_command(f"{PY} {updated_command}")
+        elif cmd.startswith("sbbench"):
+            updated_command = cmd.replace("sbbench", SWAP_BACKEND_BENCH_MOD, 1)
+            run_command(f"{PY} {updated_command}")
+        elif cmd.startswith(TEST_MOD):
+            run_command(f"{PY} {cmd}")
+        elif cmd.startswith("utest"):
+            updated_command = cmd.replace("utest", UNIT_TEST_MOD, 1)
+            run_command(f"{PY} {updated_command}")
+        elif cmd.startswith("sbtest"):
+            updated_command = cmd.replace("sbtest", SWAP_BACKEND_TEST_MOD, 1)
+            run_command(f"{PY} {updated_command}")
+        elif cmd.startswith("sctest"):
+            updated_command = cmd.replace("sctest", SWAP_CONV2D_TEST_MOD, 1)
+            run_command(f"{PY} {updated_command}")
+        elif cmd == "format":
+            run_command(f"{C_FORMAT} -i {' '.join(CSRC_FILES)}")
+            run_command(f"{PY_FORMAT} --in-place {' '.join(PY_FILES)}")
+        else:
+            print(f'Error: unsupported command: {cmd}')
+            exit(1)
