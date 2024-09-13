@@ -1,3 +1,5 @@
+# This repository is a snapshot of the framework at time of submission to HPEC *2024*, for live development see [https://github.com/KLab-AI3/ai3](https://github.com/KLab-AI3/ai3)
+
 ## ai3 - Algorithmic Innovations for Accelerated Implementations of *AI*
 
 #### A Framework to Enable Algorithmic Design Choices in *DNNs*
